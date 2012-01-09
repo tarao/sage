@@ -152,7 +152,7 @@ begin
       end
 
       order = x[:order]
-      order = "#{order*100}%" if order < 1.0
+      order = "#{order*100}%" if order && order < 1.0
       activity = Hatena::Bookmark::User.new(x[:user]).activity
 
       { :user  => x[:user],

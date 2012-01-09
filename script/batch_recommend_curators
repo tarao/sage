@@ -1,0 +1,176 @@
+#! /usr/bin/env ruby
+oldwd = Dir.pwd
+Dir.chdir(File.dirname(File.expand_path($0)))
+$:.unshift('./lib')
+
+require 'app'
+require 'permission'
+
+if %w'-h --help'.any?{|x| $*.delete(x)} || $*.size < 1
+  print <<"EOM"
+Usage: #{$0} [--help] <user> [algorithm=combined]
+EOM
+  exit
+end
+
+Dir.chdir(oldwd){ Permission.ensure_writable(App::DB.to_s) }
+
+require 'fileutils'
+require 'store'
+require 'job/queue'
+require 'job/queue/watch_status'
+require 'hatena/bookmark'
+require 'algorithm'
+
+# mapper
+require 'worker/id'
+require 'worker/pick'
+require 'worker/partial_information'
+require 'worker/other_entries'
+
+# reducer
+require 'worker/gather'
+require 'worker/drop'
+require 'worker/accumulate'
+require 'worker/reject'
+require 'worker/reject_inactive'
+require 'worker/sort'
+require 'worker/round'
+
+u = $*.shift
+algo = $*.shift || :combined
+user = Hatena::Bookmark::User.new(u)
+
+FileUtils.mkdir_p(File.dirname(App::QUEUE[:user][u][:queue]))
+lock = Store.new(App::QUEUE[:user][u][:lock])
+pid = lock.transaction do |db|
+  db[:lock].tap{|pid| db[:lock] = Process.pid unless pid}
+end
+if pid
+  STDERR.puts("There is running batch process PID #{pid}")
+  exit
+end
+
+
+queue = Job::Queue.new(*[:queue, :result].map{|x| App::QUEUE[:user][u][x]})
+
+# clean
+[ App::QUEUE[:user][u][:queue],
+  App::QUEUE[:user][u][:result],
+  queue.runner_manager_path,
+].each{|f| FileUtils.rm(f) if File.exist?(f)}
+
+if !ENV['DEBUG'] && STDERR.tty?
+  len = 0
+  watcher = queue.watch_status do |size|
+    len = [ size.to_s.length, len ].max
+    STDERR.print("\r#{size}#{' '*(len-size.to_s.length)}")
+    STDERR.flush
+  end
+end
+
+begin
+  Job::Runner.start(queue) do |runner|
+    algorithm = Algorithm.new(algo.to_sym)
+
+    # worker context
+    ctx = algorithm.context.merge(:user => u)
+
+    # map
+    ids = user.recent_bookmarks(ctx[:recent_bookmarks]).map do |b|
+      workers = []
+      args = { :uri => b['uri'], :eid => b['eid'], :count => b['count'] }
+      workers << Worker::Id.new(ctx.merge(args))
+      workers += algorithm.workers[0].map(&:new)
+      workers << Worker::Pick.new(:users)
+      queue.push(*workers).id
+    end
+
+    # reduce
+    reduce =
+      Worker::Gather.new(:user) <<
+      Worker::Reject.new{|x| (x[:eeid]||[]).size <= 1} <<
+      Worker::Accumulate.new(:score) <<
+      Worker::Reject.new{|x| x[:score] <= 0} <<
+      Worker::Drop.new(:timestamp)
+    users = reduce[queue.wait(*ids).read.flatten.compact]
+
+    # map again
+    ids = users.map do |x|
+      weight = []
+      weight << Worker::Id.new(x)
+      weight += algorithm.workers[1].map(&:new)
+      queue.push(*weight).id
+    end
+
+    # reduce again
+    reduce =
+      Worker::Reject.new{|x| x[:score] <= 0} <<
+      Worker::RejectInactive.new(0.1) <<
+      Worker::Sort.new(:score, false) <<
+      Worker::Round.new(:order) <<
+      Worker::Round.new(:score)
+    users = reduce[queue.wait(*ids).read.compact]
+
+    # retrieve some extra information of top N users
+    entries = {}
+    other_entries = {}
+    users = users[0 ... App::MAX_RESULT]
+    ids = users.map do |x|
+      workers = []
+      workers << Worker::Id.new(x)
+      workers << Worker::PartialInformation.new
+      workers << Worker::OtherEntries.new
+      queue.push(*workers).id
+    end
+    queue.wait(*ids).read.each do |x|
+      other_entries[x[:user]] = x[:other_entries].map do |e|
+        entries[e[:eid]] = {
+          :uri => e[:uri], :title => e[:title], :users => e[:users]
+        }
+        e[:eid]
+      end
+    end
+
+    # output
+    puts
+    result = users.map do |x|
+      uname = (x[:user]+':').ljust(20,' ')
+      score = x[:score].to_s.rjust(8,' ')
+      eids = x[:eid].map{|e| (x[:eeid]||[]).include?(e) ? "*#{e}" : e.to_s}
+      puts("#{uname}#{score}    #{eids.join(',')}")
+
+      x[:eid].each do |eid|
+        unless entries[eid]
+          entry = Hatena::Bookmark::Entry.new(:eid => eid)
+          entries[eid] = {
+            :uri   => entry.uri,
+            :title => entry.title,
+            :users => entry.users.size,
+          }
+        end
+      end
+
+      order = x[:order]
+      order = "#{order*100}%" if order < 1.0
+      activity = Hatena::Bookmark::User.new(x[:user]).activity
+
+      { :user  => x[:user],
+        :order => order,
+        :eid   => x[:eid],
+        :eeid  => x[:eeid],
+        :oeid  => other_entries[x[:user]],
+        :score => x[:score],
+        :activity => Worker::Round.round(activity),
+      }
+    end
+
+    open(App::FILE[:result][u], 'w'){|io| io.puts(result.to_json)}
+    open(App::FILE[:entry][u], 'w'){|io| io.puts(entries.to_json)}
+  end
+ensure
+  watcher.stop if watcher
+  STDERR.puts
+  lock.transaction{|db| db[:lock] = false}
+  queue.runner_manager.notify_status(0)
+end

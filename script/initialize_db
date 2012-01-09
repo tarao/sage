@@ -1,0 +1,13 @@
+#! /usr/bin/env ruby
+oldwd = Dir.pwd
+Dir.chdir(File.dirname(File.expand_path($0)))
+$:.unshift('./lib')
+
+require 'fileutils'
+
+db = '../db'
+system("sudo rm -r #{db}") if File.exist?(db)
+FileUtils.mkdir(db)
+
+user = $*.shift || 'www-data:www-data'
+system("sudo chown #{user} '#{db}'")

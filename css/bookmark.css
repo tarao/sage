@@ -1,0 +1,208 @@
+ol.recommend li.item
+{
+   clear: both;
+}
+
+em.users a,
+strong.users a {
+   font-size: 80%;
+}
+
+em.users a:link,
+em.users a:hover,
+em.users a:visited,
+strong.users a:link,
+strong.users a:hover,
+strong.users a:visited {
+   margin: 0 !important;
+   padding: 0 !important;
+   border: none !important;
+   font-style: normal !important;
+   font-weight: bold !important;
+   text-decoration: underline !important;
+   outline-style: none ! important;
+}
+
+strong.users a:link,
+strong.users a:hover,
+strong.users a:visited {
+  color: #ff0000 !important;
+  background: #FFCCCC !important;
+}
+
+em.users a:link,
+em.users a:hover,
+em.users a:visited {
+  color: #FF6666 !important;
+  background: #FFF0F0 !important;
+}
+
+dl.info dt
+{
+   font-weight: bold;
+   padding: 0;
+   margin: 0;
+   float: left;
+}
+dl.info dd
+{
+   padding: 0;
+   margin: 0;
+   float: right;
+}
+
+dl.entries
+{
+   font-size: 80%;
+   margin-left: 220px;
+   margin-bottom: 3em;
+}
+dl.entries dt
+{
+   font-weight: bold;
+}
+dl.entries dd
+{
+   margin-left: 2em;
+}
+dl.entries dd ul
+{
+   padding: 0;
+   margin-bottom: 1em;
+}
+dl.entries dd ul li
+{
+   list-style: none;
+}
+
+
+.partial_information {
+   float: left;
+   /* border:1px solid #eee; */
+   /* border-color: #ddd #aaa #aaa #ddd; */
+   /* padding: 5px; */
+   /* margin: 0 0 0 0; */
+   margin-bottom: 3em;
+   text-align: left;
+   line-height: 1;
+   background-color: #FFF;
+   font-size: 80%;
+   width: 205px;
+}
+.partial_information ul {
+   clear: both;
+   overflow: hidden;
+   zoom: 1;
+   padding: 0 3px;
+}
+.partial_information ul li {
+   list-style: none;
+   padding: 0;
+   margin: 0;
+}
+.partial_information ul li.followers img {
+   margin:2px 0;
+}
+.partial_information ul li a.navigator-homepage {
+   background: transparent left top no-repeat;
+   padding: 1px 0 1px 18px;
+}
+.partial_information ul.navigator-user-info {
+   padding: 5px 5px 0 5px;
+   background: #f6f6f6;
+}
+.partial_information ul.following {
+   background: #e6f8b8;
+}
+.partial_information ul li.navigator-profile-icon {
+   width: 90px;
+   overflow: hidden;
+   float: left;
+   text-align: left;
+}
+.partial_information ul li.info {
+   width: 105px;
+   float: right;
+}
+.partial_information ul li.navigator-username {
+   font-weight: bold;
+   text-align: left;
+   font-size: 100%;
+}
+.partial_information ul li.navigator-following {
+   margin-right: 74px;
+   width:100px;
+   text-align: left;
+}
+.partial_information ul li.navigator-following a {
+   display: block;
+   margin: 3px 0;
+}
+.partial_information ul.hatena-service-list {
+   margin-top: 2px;
+}
+.partial_information ul.hatena-service-list li {
+   display: inline;
+}
+.partial_information a.follow-link,
+.partial_information a.ignore-link
+{
+   cursor: pointer;
+   text-decoration: none !important;
+   margin-bottom: 5px;
+}
+.partial_information ul li {
+   text-align: right;
+   padding-bottom: 3px;
+   font-size: 90%;
+}
+.partial_information ul li span.label {
+   float: left;
+   font-weight: bold;
+}
+.partial_information ul li.followers {
+   text-align:left;
+}
+
+.partial_information ul li span.private {
+   font-size: 90%;
+}
+.partial_information ul li.private {
+   text-align: center !important;
+   padding: 2px 0;
+   background: #000;
+   color: #fff;
+   margin: -5px 0 5px 0;
+   border:1px solid #fff;
+   filter:alpha(opacity=20);
+   -moz-opacity:0.2;
+   opacity:0.2;
+   font-size: 80%;
+}
+.partial_information ul li.navigator-following {
+   display: none ! important;
+}
+
+.indicator dt
+{
+   margin-top: 2px;
+   clear: left;
+   float: left;
+}
+.indicator dd
+{
+   width: 500px;
+   margin-top: 2px;
+   margin-left: 4em;
+}
+.indicator dd.ratio
+{
+   border: 1px solid #339966;
+}
+.indicator span.ratio,
+.indicator span.count
+{
+   display: block;
+   background: #99eecc;
+   text-align: left;
+}

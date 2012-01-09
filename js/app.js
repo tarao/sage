@@ -1,4 +1,11 @@
-var App = function(header, content) {
+var App = function(parent) {
+    var frame = new FrameControl(parent, {
+        loading: [ 'header', 'loading' ],
+        progress: [ 'header', 'status' ],
+        result: [ 'header', 'result' ],
+        ready: [ 'header', 'ready' ]
+    });
+
     var Counter = function(phase) {
         var last = 0;
         var total = 0;
@@ -35,34 +42,24 @@ var App = function(header, content) {
     };
     var counter = new Counter(3);
 
-    var removeAllChildren = function(node) {
-        while (node.firstChild) node.removeChild(node.firstChild);
-    };
-
-    var showHeader = function(user) {
-        removeAllChildren(header);
-        var span = document.createElement('span');
-        span.className = 'user';
-        span.appendChild(document.createTextNode(user));
-        var h2 = document.createElement('h2');
-        [ span,
-          document.createTextNode('さんへのおすすめユーザ')
-        ].forEach(function(x){ h2.appendChild(x); });
-        header.appendChild(h2);
-    };
-
     var loading = function(small) {
         var img = document.createElement('img');
         img.src = './img/loading' + (small ? '_s' : '') + '.gif';
         return img;
     };
 
-    var showLoading = function(node) {
-        removeAllChildren(node);
-        var div = document.createElement('div');
-        div.style.textAlign = 'center';
-        div.appendChild(loading());
-        node.appendChild(div);
+    var showHeader = function(user) {
+        frame.activate('header', function(node) {
+            var h2 = node.getElementsByTagName('h2')[0];
+            U.removeAllChildren(h2);
+
+            var span = document.createElement('span');
+            span.className = 'user';
+            span.appendChild(document.createTextNode(user));
+            [ span,
+              document.createTextNode('さんへのおすすめユーザ')
+            ].forEach(function(x){ h2.appendChild(x); });
+        });
     };
 
     var getPartialInformation = function(u, node) {
@@ -164,8 +161,8 @@ var App = function(header, content) {
         return node;
     };
 
-    var showResult = function(result, entry) {
-        removeAllChildren(content);
+    var showResult = function(content, result, entry) {
+        U.removeAllChildren(content);
 
         var ol = document.createElement('ol');
         ol.className = 'recommend';
@@ -203,68 +200,24 @@ var App = function(header, content) {
         next();
     };
 
-    var showStatus = function(jobs) {
-        var progress = document.getElementById('progress');
-        if (progress) {
-            removeAllChildren(progress);
-        } else {
-            removeAllChildren(content);
-
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode('計算中'));
-            div.appendChild(loading(true));
-            content.appendChild(div);
-
-            var h3 = document.createElement('h3');
-            h3.appendChild(document.createTextNode('進捗状況(推定値)'));
-            content.appendChild(h3);
-
-            var progress = document.createElement('div');
-            progress.id = 'progress';
-            content.appendChild(progress);
-        }
-
+    var showStatus = function(node, jobs) {
         var c = counter(jobs);
         c.push(Math.round(100*counter.ratio()));
 
-        var indicator = document.createElement('dl');
-        indicator.className = 'indicator';
-
-        [ [ '処理済', 'count' ],
-          [ 'タスク', 'count' ],
-          [ '進捗率', 'ratio' ],
-        ].forEach(function(x, i) {
-            var label = document.createElement('dt');
-            label.appendChild(document.createTextNode(x[0]));
-
+        [ 'count', 'ratio' ].reduce(function(r, k) {
+            return r.concat(U.getElementsByTagAndClassName(node, 'span', k));
+        }, []).forEach(function(x, i) {
             var length = c[i]*2;
             var unit = '';
-            if (x[1] == 'ratio') {
+            if (x.className == 'ratio') {
                 length = Math.round(250*length/100);
                 unit = '%';
             }
 
-            var dd = document.createElement('dd');
-            dd.className = x[1];
-            var count = document.createElement('span');
-            count.className = x[1];
-            count.style.width = length+'px';
-            count.appendChild(document.createTextNode(c[i]+unit));
-            dd.appendChild(count);
-
-            indicator.appendChild(label);
-            indicator.appendChild(dd);
+            U.removeAllChildren(x);
+            x.style.width = length+'px';
+            x.appendChild(document.createTextNode(c[i]+unit));
         });
-
-        progress.appendChild(indicator);
-    };
-
-    var showReady = function() {
-        removeAllChildren(content);
-        var msg = 'まだなにもありません';
-        var p = document.createElement('p');
-        p.appendChild(document.createTextNode(msg));
-        content.appendChild(p);
     };
 
     this.update = function(user, noloading) {
@@ -274,7 +227,7 @@ var App = function(header, content) {
         if (!user) return;
 
         showHeader(user);
-        if (!noloading) showLoading(content);
+        if (!noloading) frame.open('loading');
         var self = this;
 
         GNN.XHR.json.retrieve({
@@ -284,14 +237,18 @@ var App = function(header, content) {
             res = res.st
             switch (res.status) {
             case 'done':
-                showResult(res.result, res.entry);
+                frame.open('result', function(header, result) {
+                    showResult(result, res.result, res.entry);
+                });
                 break;
             case 'running':
-                showStatus(res.jobs);
+                frame.open('progress', function(header, status) {
+                    showStatus(status, res.jobs);
+                });
                 setTimeout(function(){ self.update(user, true); }, 100);
                 break;
             case 'ready':
-                showReady();
+                frame.open('ready');
                 break;
             }
         }, function() { // timeout
@@ -318,12 +275,6 @@ App.api = function(name, params) {
     return uri;
 };
 
-App.onError = function(res) {
-    console.debug(res);
-};
-
 var init = function() {
-    var header = document.getElementById('header');
-    var content = document.getElementById('content');
-    new App(header, content).update();
+    new App(document.getElementById('article')).update();
 };

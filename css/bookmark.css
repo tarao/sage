@@ -1,3 +1,7 @@
+div.loading {
+   text-align: center;
+}
+
 ol.recommend li.item
 {
    clear: both;
@@ -199,9 +203,14 @@ dl.entries dd ul li
 {
    border: 1px solid #339966;
 }
+.indicator span.ratio:before,
+.indicator span.count:before {
+   content: "\0000A0";
+}
 .indicator span.ratio,
 .indicator span.count
 {
+   width: 0px;
    display: block;
    background: #99eecc;
    text-align: left;

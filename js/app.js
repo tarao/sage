@@ -277,7 +277,11 @@ var App = function(header, content) {
         if (!noloading) showLoading(content);
         var self = this;
 
-        GNN.XHR.json(App.api('status', { user: user }), function(res) {
+        GNN.XHR.json.retrieve({
+            st: App.api('status', { user: user }),
+            timeout: 5000
+        }, function(res) { // success
+            res = res.st
             switch (res.status) {
             case 'done':
                 showResult(res.result, res.entry);
@@ -290,7 +294,9 @@ var App = function(header, content) {
                 showReady();
                 break;
             }
-        }, App.onError);
+        }, function() { // timeout
+            self.update(user, true);
+        });
     };
 };
 

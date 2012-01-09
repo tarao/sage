@@ -161,6 +161,7 @@
             typeof JSON != 'undefined') {
             alt = function(){ return false; };
             var cb = callback || function(){};
+            error = error || function(){};
             callback = function(req) {
                 var obj;
                 try {

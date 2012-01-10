@@ -1,3 +1,9 @@
+input, select, textarea {
+   border: 2px solid #666666;
+   margin: 0.1em;
+   font-size: 100%;
+}
+
 div.loading {
    text-align: center;
 }

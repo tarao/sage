@@ -1,9 +1,10 @@
 var App = function(parent) {
     var frame = new FrameControl(parent, {
-        loading: [ 'header', 'loading' ],
-        progress: [ 'header', 'status' ],
-        result: [ 'header', 'result' ],
-        ready: [ 'header', 'ready' ]
+        select: [ 'select' ],
+        loading: [ 'header', 'loading', 'select' ],
+        progress: [ 'header', 'status', 'select' ],
+        result: [ 'header', 'result', 'select' ],
+        ready: [ 'header', 'ready', 'select' ]
     });
 
     var Counter = function(phase) {
@@ -48,17 +49,12 @@ var App = function(parent) {
         return img;
     };
 
-    var showHeader = function(user) {
+    var showHeader = function(nodes) {
+        nodes = U.toA(arguments);
         frame.activate('header', function(node) {
             var h2 = node.getElementsByTagName('h2')[0];
             U.removeAllChildren(h2);
-
-            var span = document.createElement('span');
-            span.className = 'user';
-            span.appendChild(document.createTextNode(user));
-            [ span,
-              document.createTextNode('さんへのおすすめユーザ')
-            ].forEach(function(x){ h2.appendChild(x); });
+            nodes.forEach(function(x){ h2.appendChild(x); });
         });
     };
 
@@ -220,13 +216,48 @@ var App = function(parent) {
         });
     };
 
+    var IdleTimer = function(wait, callback) {
+        var id = null;
+        this.ping = function() {
+            if (id != null) clearTimeout(id);
+            id = setTimeout(callback, wait);
+        };
+        return this;
+    };
+
+    var self = this;
+    var form = document.getElementById('id-selector');
+    var selector = document.getElementById('hatena-id');
+
+    var setUser = function() {
+        var user = selector.value;
+        location.href = './#'+user;
+        self.update(user);
+    };
+
+    var timer = new IdleTimer(1000, setUser);
+    new U.Observer(selector, 'onkeyup', function(e){ timer.ping(); });
+    new U.Observer(form, 'onsubmit', function(e) {
+        e.stop();
+        selector.blur();
+        setUser();
+    });
+
     this.update = function(user, noloading) {
         if (!user && new RegExp('#(\\w+)$').test(location.href)) {
             user = RegExp.$1;
         }
-        if (!user) return;
+        if (!user) {
+            frame.open('select');
+            return;
+        } else {
+            selector.value = user;
+            var e = document.createElement('span');
+            e.className = 'user';
+            e.appendChild(document.createTextNode(user));
+            showHeader(e, document.createTextNode('さんへのおすすめユーザ'));
+        }
 
-        showHeader(user);
         if (!noloading) frame.open('loading');
         var self = this;
 
@@ -255,6 +286,8 @@ var App = function(parent) {
             self.update(user, true);
         });
     };
+
+    return this;
 };
 
 App.baseURI = function() {

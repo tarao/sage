@@ -1,5 +1,7 @@
 require 'pathname'
 
+$KCODE='UTF8'
+
 class Pathname
   def [](*paths)
     loc = self
@@ -59,23 +61,66 @@ class App
   SHOW_ENTRIES = 5
   SHOW_OTHER_ENTRIES = 3
 
+  class Path
+    def initialize(user, algorithm)
+      @user = user
+      @algo = algorithm
+    end
+
+    def dir() return App.user_dir(@user) end
+
+    def db()
+      unless @db
+        keys = [ :queue, :result, :lock ]
+        @db = Hash[*keys.map{|k| [ k, algo_db(k) ]}.flatten]
+        class << @db
+          [ :queue, :result, :lock ].each{|m| define_method(m){ self[m] } }
+        end
+      end
+      return @db
+    end
+
+    def queue() return algo_db(:queue) end
+    def result() return algo_db(:result) end
+    def lock() return algo_db(:lock) end
+    def user_lock() return db_(:lock) end
+    def result() return algo(FILE[:result][@user]) end
+    def entry() return algo(FILE[:entry][@user]) end
+
+    private
+
+    def db_(which) return QUEUE[:user][@user][which] end
+
+    def algo(path)
+      dirname = File.dirname(path)
+      fname = File.basename(path)
+      return File.join(dirname, [ @algo.to_s, fname ].join('.'))
+    end
+
+    def algo_db(which) return algo(db_(which)) end
+  end
+
   def self.up_to_date?(file)
     return false unless File.exist?(file)
     return File.mtime(file).to_i + App::UPTODATE > Time.now.to_i
   end
 
-  attr_reader :cgi, :user
+  attr_reader :cgi, :user, :algorithm
   def initialize()
     require 'cgi'
     require 'job/queue'
     require 'json'
+    require 'algorithm'
 
     @cgi = CGI.new
     cb = (@cgi.params['callback'][0] || '').strip
     cb = nil if cb.length == 0 || cb !~ /^\$?[a-zA-Z0-9\.\_\[\]]+$/
     @callback = cb
-    @user = param(:user)
+    @user = param(:user) || ''
     @user = nil unless @user =~ /^\w+$/
+    @algorithm = param(:algorithm) || ''
+    @algorithm = nil unless Algorithm.defined?(@algorithm)
+    @path = Path.new(@user, @algorithm)
   end
 
   def header()
@@ -99,11 +144,11 @@ class App
   def param(key) return params[key.to_s][0] end
 
   def check_running()
-    return Store.new(QUEUE[:user][user][:lock]).ro.transaction{|db| db[:lock]}
+    return Store.new(@path.lock).ro.transaction{|db| db[:lock]}
   end
 
   def status(&block)
-    dir = File.dirname(App::QUEUE[:user][user][:queue])
+    dir = @path.dir
     return block.call(:ready, nil) unless File.exist?(dir)
 
     jobs = IO.popen('-', 'r+') do |io|
@@ -112,8 +157,7 @@ class App
       else # child
         size = -1
 
-        args = [:queue, :result].map{|x| QUEUE[:user][user][x]}
-        queue = Job::Queue.new(*args)
+        queue = Job::Queue.new(@path.db.queue, @path.db.result)
         queue.watch
 
         Job::Message::EventLoop.start do |ev|
@@ -129,16 +173,30 @@ class App
     if check_running
       block.call(:running, jobs)
     else
-      result = IO.read(FILE[:result][user]) rescue nil
-      entry = IO.read(FILE[:entry][user]) rescue nil
-      if result && entry
-        val = {
-          :result => JSON.parse(result),
-          :entry  => JSON.parse(entry),
-        }
-        block.call(:done, val)
+      if File.exist?(@path.result) && File.exist?(@path.entry)
+        block.call(:done, nil)
       else
         block.call(:ready, nil)
+      end
+    end
+  end
+
+  def result(&block)
+    status do |st,size|
+      if st == :running
+        block.call(st,size)
+      else
+        result = IO.read(@path.result) rescue nil
+        entry = IO.read(@path.entry) rescue nil
+        if result && entry
+          val = {
+            :result => JSON.parse(result),
+            :entry  => JSON.parse(entry),
+          }
+          block.call(:done, val)
+        else
+          block.call(:ready, nil)
+        end
       end
     end
   end

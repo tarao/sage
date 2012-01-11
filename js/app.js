@@ -1,7 +1,8 @@
 var App = function(parent) {
     var frame = new FrameControl(parent, {
         select: [ 'select' ],
-        loading: [ 'header', 'loading', 'select' ],
+        loading: [ 'loading', 'select' ],
+        user: [ 'algorithm', 'select' ],
         progress: [ 'header', 'status', 'select' ],
         result: [ 'header', 'result', 'select' ],
         ready: [ 'header', 'ready', 'select' ]
@@ -42,6 +43,15 @@ var App = function(parent) {
         return self;
     };
     var counter = new Counter(3);
+
+    var self = this;
+
+    var move = function(user, algorithm) {
+        var params = '#'+user;
+        if (algorithm) params += ':'+algorithm;
+        location.href = params;
+        self.update(user);
+    };
 
     var loading = function(small) {
         var img = document.createElement('img');
@@ -216,6 +226,75 @@ var App = function(parent) {
         });
     };
 
+    var makeButton = function(node, args) {
+        var button = document.createElement('a');
+        button.className = 'button';
+        button.href = '#'+args.user+':'+args.name;
+
+        var status = document.createElement('span');
+        status.className = 'ratio';
+
+        [ 'name', 'desc' ].forEach(function(x) {
+            var span = document.createElement('span');
+            span.className = x;
+            span.appendChild(document.createTextNode(args[x]));
+            status.appendChild(span);
+        });
+
+        new U.Observer(button, 'onclick', function(e) {
+            e.stop();
+            move(args.user, args.name);
+        });
+
+        var counter = new Counter(3);
+        var updateStatus = function() {
+            var e = button;
+            while (e && e != document) e = e.parentNode;
+            if (!e) return; // the button has been removed
+
+            var params = { user: args.user, algorithm: args.name };
+            GNN.XHR.json.retrieve({
+                json: App.api('status', params),
+                timeout: 50000
+            }, function(res) {
+                res = res.json;
+                switch (res.status) {
+                case 'done':
+                    button.className += ' done';
+                    status.style.width = '100%';
+                    break;
+                case 'running':
+                    counter(res.jobs);
+                    status.style.width = Math.round(100*counter.ratio())+'%';
+                    setTimeout(updateStatus, 100);
+                    break;
+                case 'queued':
+                case 'ready':
+                    status.style.width = '0';
+                    setTimeout(updateStatus, 5000);
+                    break;
+                }
+            }, function() {
+                updateStatus();
+            });
+        };
+
+        button.appendChild(status);
+        node.appendChild(button);
+
+        updateStatus();
+    };
+
+    var addButtons = function(user, ls) {
+        frame.open('user', function(div) {
+            div = U.getElementsByTagAndClassName(div, 'div', 'buttons')[0];
+            U.removeAllChildren(div);
+            ls.forEach(function(algo) {
+                makeButton(div, { user: user, name: algo[0], desc: algo[1] });
+            });
+        });
+    };
+
     var IdleTimer = function(wait, callback) {
         var id = null;
         this.ping = function() {
@@ -225,15 +304,11 @@ var App = function(parent) {
         return this;
     };
 
-    var self = this;
     var form = document.getElementById('id-selector');
     var selector = document.getElementById('hatena-id');
+    var desc;
 
-    var setUser = function() {
-        var user = selector.value;
-        location.href = './#'+user;
-        self.update(user);
-    };
+    var setUser = function(){ move(selector.value); };
 
     var timer = new IdleTimer(1000, setUser);
     new U.Observer(selector, 'onkeyup', function(e){ timer.ping(); });
@@ -243,10 +318,18 @@ var App = function(parent) {
         setUser();
     });
 
-    this.update = function(user, noloading) {
-        if (!user && new RegExp('#(\\w+)$').test(location.href)) {
-            user = RegExp.$1;
+    var parseParams = function(uri) {
+        if (new RegExp('#(\\w+)(?::(\\w+))?$').test(uri)) {
+            return { user: RegExp.$1, algorithm: RegExp.$2 };
+        } else {
+            return {};
         }
+    };
+
+    this.update = function(user, noloading) {
+        var params = parseParams(location.href);
+        user = user || params.user;
+
         if (!user) {
             frame.open('select');
             return;
@@ -259,32 +342,47 @@ var App = function(parent) {
         }
 
         if (!noloading) frame.open('loading');
-        var self = this;
 
-        GNN.XHR.json.retrieve({
-            st: App.api('status', { user: user }),
-            timeout: 5000
-        }, function(res) { // success
-            res = res.st
-            switch (res.status) {
-            case 'done':
-                frame.open('result', function(header, result) {
-                    showResult(result, res.result, res.entry);
-                });
-                break;
-            case 'running':
-                frame.open('progress', function(header, status) {
-                    showStatus(status, res.jobs);
-                });
-                setTimeout(function(){ self.update(user, true); }, 100);
-                break;
-            case 'ready':
-                frame.open('ready');
-                break;
-            }
-        }, function() { // timeout
-            self.update(user, true);
-        });
+        if (params.algorithm) {
+
+            GNN.XHR.json.retrieve({
+                json: App.api('result', params),
+                timeout: 5000
+            }, function(res) { // success
+                res = res.json
+                switch (res.status) {
+                case 'done':
+                    frame.open('result', function(header, result) {
+                        showResult(result, res.result, res.entry);
+                    });
+                    break;
+                case 'running':
+                    frame.open('progress', function(header, status) {
+                        showStatus(status, res.jobs);
+                    });
+                    setTimeout(function(){ self.update(user, true); }, 100);
+                    break;
+                case 'queued':
+                    frame.open('progress', function(header, status) {
+                        showStatus(status, 0);
+                    });
+                    setTimeout(function(){ self.update(user, true); }, 3000);
+                    break;
+                case 'ready':
+                    frame.open('ready');
+                    break;
+                }
+            }, function() { // timeout
+                self.update(user, true);
+            });
+        } else if (!desc) {
+            GNN.XHR.json(App.api('list'), function(ls) {
+                desc = ls;
+                addButtons(user, ls);
+            });
+        } else {
+            addButtons(user, desc);
+        }
     };
 
     return this;

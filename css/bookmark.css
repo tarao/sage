@@ -4,6 +4,86 @@ input, select, textarea {
    font-size: 100%;
 }
 
+div.algorithm a.button {
+   display: inline-block;
+   margin: 0 2em 2em 0;
+   width: 250px;
+   height: 8em;
+   border: 2px solid #cccccc;
+   text-decoration: none;
+   background-color: #efefef;
+   -moz-border-radius:    10px;
+   -webkit-border-radius: 10px;
+   border-radius:         10px;
+}
+div.algorithm a.button:hover,
+div.algorithm a.button:active {
+   border-color: #ccccff;
+   background-color: #f5f5ff;
+   outline: none;
+}
+div.algorithm a.button .ratio {
+   text-align: left;
+   width: 0;
+   height: 100%;
+   display: block;
+   -moz-border-radius-topleft:        8px;
+   -moz-border-radius-bottomleft:     8px;
+   -webkit-border-top-left-radius:    8px;
+   -webkit-border-bottom-left-radius: 8px;
+   border-top-left-radius:            8px;
+   border-bottom-left-radius:         8px;
+}
+div.algorithm a.button .ratio,
+div.algorithm a.button.done {
+   border-color: #88cc99;
+   background-color: #bbffcc;
+   background: -moz-linear-gradient(top,
+      #fefffe, #ccffdd 25%,
+      #bbf8cc 25%, #ccffdd);
+   background: -webkit-gradient(linear, left top, left, bottom
+      from(#fefffe), color-stop(0.25, #ccffdd),
+      color-stop(0.25, #bbf8cc), to(#ccffdd));
+}
+div.algorithm a.button:hover .ratio,
+div.algorithm a.button:active .ratio,
+div.algorithm a.button.done:hover,
+div.algorithm a.button.done:active {
+   background-color: #bbffee;
+   background: -moz-linear-gradient(top,
+      #fefffe, #ccffee 25%,
+      #bbf8ee 25%, #ccffee);
+   background: -webkit-gradient(linear, left top, left, bottom
+      from(#fefffe), color-stop(0.25, #ccffee),
+      color-stop(0.25, #bbf8ee), to(#ccffee));
+}
+div.algorithm a.button.done:hover,
+div.algorithm a.button.done:active {
+   border-color: #88ddc8;
+}
+div.algorithm a.button.done .ratio {
+   background: transparent ! important;
+}
+div.algorithm a.button .name,
+div.algorithm a.button .desc {
+   margin: 0 20px 0 20px;
+   display: block;
+   width: 180px;
+   background-color: transparent;
+}
+div.algorithm a.button .name {
+   padding-top: 1em;
+   color: #333333 ! important;
+   font-weight: bold;
+   font-size: 150%;
+}
+div.algorithm a.button .desc {
+   border-top: 1px solid #666666;
+   padding-left: 2em;
+   font-size: 90%;
+   color: #999999 ! important;
+}
+
 div.loading {
    text-align: center;
 }

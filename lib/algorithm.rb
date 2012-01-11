@@ -1,4 +1,3 @@
-require 'app'
 require 'worker/entry_users'
 require 'worker/mark_order'
 require 'worker/mark_effective'
@@ -67,6 +66,15 @@ class Worker
 end
 
 class Algorithm
+  DESCRIPTION = {
+    :broadcaster =>
+    '人気エントリをいち早く見つけている人',
+    :match =>
+    '似たエントリをブクマしている人',
+    :freak =>
+    'ニッチなエントリをブクマしている人',
+  }
+
   CONTEXT = {
     :combined => {
       :recent_bookmarks => 100,
@@ -102,8 +110,18 @@ class Algorithm
     },
   }
 
-  def initialize(name) @name = name end
+  def self.defined?(algo)
+    return nil if !algo || algo.to_s.empty?
+    return [ DESCRIPTION, Worker::SET, CONTEXT ].all?{|list| list[algo.to_sym]}
+  end
 
+  def self.description()
+    return DESCRIPTION.reject{|k,d| !self.defined?(k)}.sort do |a,b|
+      a[0].to_s <=> b[0].to_s
+    end
+  end
+
+  def initialize(name) @name = name end
   def workers() return Worker::SET[@name] end
   def context() return CONTEXT[@name] end
 end

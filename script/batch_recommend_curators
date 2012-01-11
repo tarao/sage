@@ -38,11 +38,12 @@ require 'worker/sort'
 require 'worker/round'
 
 u = $*.shift
-algo = $*.shift || :combined
+algo = ($*.shift || :combined).to_sym
 user = Hatena::Bookmark::User.new(u)
+path = App::Path.new(u, algo)
 
-FileUtils.mkdir_p(File.dirname(App::QUEUE[:user][u][:queue]))
-lock = Store.new(App::QUEUE[:user][u][:lock])
+FileUtils.mkdir_p(path.dir)
+lock = Store.new(path.lock)
 pid = lock.transaction do |db|
   db[:lock].tap{|pid| db[:lock] = Process.pid unless pid}
 end
@@ -51,12 +52,11 @@ if pid
   exit
 end
 
-
-queue = Job::Queue.new(*[:queue, :result].map{|x| App::QUEUE[:user][u][x]})
+queue = Job::Queue.new(path.db.queue, path.db.result)
 
 # clean
-[ App::QUEUE[:user][u][:queue],
-  App::QUEUE[:user][u][:result],
+[ path.db.queue,
+  path.db.result,
   queue.runner_manager_path,
 ].each{|f| FileUtils.rm(f) if File.exist?(f)}
 
@@ -71,7 +71,7 @@ end
 
 begin
   Job::Runner.start(queue) do |runner|
-    algorithm = Algorithm.new(algo.to_sym)
+    algorithm = Algorithm.new(algo)
 
     # worker context
     ctx = algorithm.context.merge(:user => u)
@@ -165,8 +165,8 @@ begin
       }
     end
 
-    open(App::FILE[:result][u], 'w'){|io| io.puts(result.to_json)}
-    open(App::FILE[:entry][u], 'w'){|io| io.puts(entries.to_json)}
+    open(path.result, 'w'){|io| io.puts(result.to_json)}
+    open(path.entry, 'w'){|io| io.puts(entries.to_json)}
   end
 ensure
   watcher.stop if watcher

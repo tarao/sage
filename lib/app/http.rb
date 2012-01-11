@@ -36,20 +36,33 @@ class App
       end
     end
 
+    @@initialized = nil
+    @@runner = nil
+
+    def self.init()
+      unless @@initialized
+        queue, result = [:queue, :result].map{|x| App::QUEUE[:http_fetch, x]}
+        dir = File.dirname(queue)
+        FileUtils.mkdir_p(dir) unless File.exist?(dir)
+        @@queue = Job::Queue.new(queue, result)
+        @@runner = Job::Runner.start(@@queue, 1)
+        @@pid = Process.pid
+
+        s = Store.new(App::QUEUE[:http_fetch, :last])
+        s.transaction{|db| db[:timestamp] = Time.now.to_f}
+
+        @@initialized = true
+      end
+    end
+
+    END{ @@runner.stop if @@runner && Process.pid == @@pid }
+
     def self.fetch(*uris)
+      init
+
       id = @@queue.push(*uris.map{|uri| Fetch.new(uri)}).id
       result = @@queue.wait(id).read
       return result.length <= 1 ? result.first : result
     end
-
-    queue, result = [:queue, :result].map{|x| App::QUEUE[:http_fetch, x]}
-    FileUtils.mkdir_p(File.dirname(queue))
-    @@queue = Job::Queue.new(queue, result)
-    @@runner = Job::Runner.start(@@queue, 1)
-    @@pid = Process.pid
-    END{ @@runner.stop if Process.pid == @@pid }
-
-    s = Store.new(App::QUEUE[:http_fetch, :last])
-    s.transaction{|db| db[:timestamp] = Time.now.to_f}
   end
 end

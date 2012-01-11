@@ -12,11 +12,11 @@ app = App.new
 app.error_exit(STATUS[400]) unless app.user
 app.error_exit(STATUS[400]) unless app.algorithm
 
-app.status do |st,val|
+app.result do |st,val|
   case st
   when :done
     print(app.header)
-    puts(app.json(:status => :done))
+    puts(app.json(val.merge(:status => :done)))
   when :running
     print(app.header)
     puts(app.json(:status => :running, :jobs => val))

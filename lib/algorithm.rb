@@ -112,7 +112,7 @@ class Algorithm
 
   def self.defined?(algo)
     return nil if !algo || algo.to_s.empty?
-    return [ DESCRIPTION, Worker::SET, CONTEXT ].all?{|list| list[algo.to_sym]}
+    return [ Worker::SET, CONTEXT ].all?{|list| list[algo.to_sym]}
   end
 
   def self.description()

@@ -34,6 +34,12 @@ var FrameControl = function(node, definition) {
         var fs = this.select.apply(this, definition[page].concat(persistent));
         return callback && callback.apply(null, fs);
     };
+    this.filter = function(klass) {
+        var ks = U.toA(arguments);
+        return frames.filter(function(f) {
+            return ks.every(function(k){ return U.klass(f).indexOf(k) >= 0; });
+        });
+    };
     this.persistent = function() {
         persistent = persistent.concat(U.toA(arguments));
     };

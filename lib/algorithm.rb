@@ -68,7 +68,7 @@ end
 class Algorithm
   DESCRIPTION = {
     :broadcaster =>
-    '人気エントリをいち早く見つけている人',
+    '人気エントリをいち早くブクマしている人',
     :match =>
     '似たエントリをブクマしている人',
     :freak =>

@@ -73,7 +73,7 @@ div.algorithm a.button .desc {
 }
 div.algorithm a.button .name {
    padding-top: 1em;
-   color: #333333 ! important;
+   color: #999999;
    font-weight: bold;
    font-size: 150%;
 }
@@ -81,7 +81,13 @@ div.algorithm a.button .desc {
    border-top: 1px solid #666666;
    padding-left: 2em;
    font-size: 90%;
-   color: #999999 ! important;
+   color: #999999;
+}
+div.algorithm a.button.done .name {
+   color: #333333;
+}
+div.algorithm a.button.done .desc {
+   color: #558877;
 }
 
 div.loading {

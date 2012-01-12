@@ -7,8 +7,10 @@ var U = {
         while (node.firstChild) node.removeChild(node.firstChild);
     },
     getElementsByTagAndClassName: function(node, tag, klass) {
+        klass = U.toA(arguments).slice(2);
         return U.toA(node.getElementsByTagName(tag)).filter(function(e) {
-            return U.klass(e).indexOf(klass) >= 0;
+            var ks = U.klass(e);
+            return klass.every(function(k){ return ks.indexOf(k) >= 0; });
         });
     },
     Event: function(e) {
@@ -54,4 +56,55 @@ var U = {
         self.start();
         return self;
     }
+};
+
+var Counter = function(phase) {
+    var last = 0;
+    var total = 0;
+    var count = 0;
+
+    phase = phase || 1;
+    var p = 0;
+    var threshold = 5;
+    var dec = false;
+    var ratio = 0.0;
+
+    var self = function(val) {
+        if (val < last) {
+            if (!dec && val < threshold) dec = true;
+            count += last - val;
+        } else if (last < val) {
+            if (dec && val > threshold) {
+                dec = false;
+                p++;
+            }
+            total += val - last;
+        }
+        last = val;
+
+        return [ count, total ];
+    };
+
+    self.ratio = function() {
+        if (total <= 0) return 0;
+        return ( p + (count / total) ) / phase;
+    };
+
+    self.percentage = function() {
+        return Math.round(100*self.ratio());
+    };
+
+    return self;
+};
+
+var IdleTimer = function(wait, callback) {
+    var id = null;
+    this.ping = function() {
+        this.stop();
+        id = setTimeout(callback, wait);
+    };
+    this.stop = function() {
+        if (id != null) clearTimeout(id);
+    };
+    return this;
 };

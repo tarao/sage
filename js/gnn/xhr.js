@@ -115,6 +115,10 @@
                 error(xhr, wait);
             }
         }, t);
+
+        return { stop: function() {
+            while (wait.length > 0) xhr[wait.shift()].stop();
+        } };
     };
 
     XHR.get = function(uri, callback, error) {

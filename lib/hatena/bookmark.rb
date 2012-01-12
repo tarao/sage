@@ -77,8 +77,12 @@ module Hatena
     class << API; include Loggable end
 
     def self.save(file, data)
-      FileUtils.mkdir_p(File.dirname(file))
-      open(file, 'w'){|io| io.write(data)}
+      dir = File.dirname(file)
+      FileUtils.mkdir_p(dir) unless File.exist?(dir)
+      File.open(file, 'w') do |io|
+        io.flock(File::LOCK_EX)
+        io.write(data)
+      end
     end
 
     DEFAULT_CONV = {

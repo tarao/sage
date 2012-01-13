@@ -10,7 +10,7 @@ var App = function(parent) {
     });
 
     this.page = {};
-    var last = {};
+    var last = { user: 0, algorithm: 0 };
     var page = new PageControl(this.page, {
         // page transition
         init: function() {

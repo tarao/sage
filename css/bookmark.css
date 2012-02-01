@@ -4,6 +4,44 @@ input, select, textarea {
    font-size: 100%;
 }
 
+div.command {
+   text-align: center;
+}
+div.command a.button {
+   display: inline-block;
+   margin: 0 2em 2em 0;
+   width: 250px;
+   height: 2em;
+   border: 2px solid #cccccc;
+   text-decoration: none;
+   color: #333333;
+   font-weight: bold;
+   font-size: 150%;
+   padding-top: 0.5em;
+   border-color: #cc9999;
+   background-color: #ffcccc;
+   background: -moz-linear-gradient(top,
+      #fffefe, #ffdddd 25%,
+      #f8cccc 25%, #ffdddd);
+   background: -webkit-gradient(linear, left top, left, bottom
+      from(#fffefe), color-stop(0.25, #ffdddd),
+      color-stop(0.25, #f8cccc), to(#ffdddd));
+   -moz-border-radius:    10px;
+   -webkit-border-radius: 10px;
+   border-radius:         10px;
+}
+div.command a.button:hover,
+div.command a.button:active {
+   outline: none;
+}
+div.command a.button:active {
+   border-color: #ffcccc;
+   background-color: #fff5f5;
+}
+div.message {
+   color: #ff0000;
+}
+
 div.algorithm a.button {
    display: inline-block;
    margin: 0 2em 2em 0;

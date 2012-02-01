@@ -41,6 +41,12 @@
                 self.error = function(){};
             };
 
+            var data = null;
+            if (method == 'POST') {
+                data = uri.data();
+                uri.params = {};
+            }
+
             req.open(method, uri+'');
             req.onreadystatechange = function(e) {
                 if (req.readyState == 4) {
@@ -51,7 +57,7 @@
                     }
                 }
             }
-            req.send(null);
+            req.send(data);
         }
 
         return self;

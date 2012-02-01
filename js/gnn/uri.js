@@ -34,7 +34,7 @@
         this.params = params;
         this.q = q;
 
-        this.toLocalPath = function() {
+        this.data = function() {
             params = [];
             for (var p in this.params) {
                 if (typeof this.params[p] != 'undefined') {
@@ -47,8 +47,12 @@
                     }
                 }
             }
+            return params.join('&');
+        };
+
+        this.toLocalPath = function() {
+            var params = this.data();
             var s = this.local.join('/');
-            params = params.join('&');
             return '/' + (params.length ? s + this.q + params : s);
         };
 

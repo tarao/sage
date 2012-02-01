@@ -4,6 +4,7 @@ Dir.chdir(File.dirname(File.expand_path($0)))
 $:.unshift('./lib')
 
 require 'app'
+require 'app/run'
 require 'permission'
 
 if %w'-h --help'.any?{|x| $*.delete(x)} || $*.size < 1
@@ -14,6 +15,12 @@ EOM
 end
 
 Dir.chdir(oldwd){ Permission.ensure_writable(App::DB.to_s) }
+
+u = $*.shift
+algo = $*.shift
+
+exit(App.run(u)) unless algo # calculate all
+algo = algo.to_sym
 
 require 'fileutils'
 require 'store'
@@ -37,8 +44,6 @@ require 'worker/reject_inactive'
 require 'worker/sort'
 require 'worker/round'
 
-u = $*.shift
-algo = ($*.shift || :combined).to_sym
 user = Hatena::Bookmark::User.new(u)
 path = App::Path.new(u, algo)
 
@@ -58,6 +63,8 @@ queue = Job::Queue.new(path.db.queue, path.db.result)
 [ path.db.queue,
   path.db.result,
   queue.runner_manager_path,
+  path.result,
+  path.entry,
 ].each{|f| FileUtils.rm(f) if File.exist?(f)}
 
 if !ENV['DEBUG'] && STDERR.tty?

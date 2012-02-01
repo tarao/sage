@@ -38,18 +38,22 @@ module Hatena
         channel = nil
         total = nil
         loop do
-          res = App::HTTP.fetch(URI[:user_rss] % [ user, i ])
-          rss = RSS::Parser.parse(res)
-          xml = UserRssXml.new(res)
-          total = xml.total unless total
-          channel = rss.channel unless channel
-          entries += rss.items.map do |e|
-            e.instance_eval{ @count = xml.count(link) }
-            def e.count() return @count end
-            e
+          begin
+            res = App::HTTP.fetch(URI[:user_rss] % [ user, i ])
+            rss = RSS::Parser.parse(res)
+            xml = UserRssXml.new(res)
+            total = xml.total unless total
+            channel = rss.channel unless channel
+            entries += rss.items.map do |e|
+              e.instance_eval{ @count = xml.count(link) }
+              def e.count() return @count end
+              e
+            end
+            i += rss.items.size
+            break if i >= size
+          rescue
+            break
           end
-          i += rss.items.size
-          break if i >= size
         end
         return {
           :total => total,

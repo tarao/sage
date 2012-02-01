@@ -20,6 +20,9 @@ app.status do |st,val|
   when :running
     print(app.header)
     puts(app.json(:status => :running, :jobs => val))
+  when :queued
+    print(app.header)
+    puts(app.json(:status => :queued))
   when :ready
     print(app.header)
     puts(app.json(:status => :ready))

@@ -21,12 +21,12 @@
 </head>
 <body onload="init()">
   <div id="article">
-    <h1>Find Your Curators</h1>
+    <h1>Find Your Curators (&beta;)</h1>
 
     <div class="frame select">
       <form action="." id="id-selector">
         <div>
-          <label for="hatena-id">id:</label>
+          <label for="hatena-id">はてなID:</label>
           <input type="text" id="hatena-id" />
         </div>
       </form>
@@ -34,7 +34,37 @@
 
     <div class="frame request">
       <h2>はじめに</h2>
-      <p>せつめい(計算には時間がかかります)</p>
+      <p>TODO:一般向けのせつめい(計算には時間がかかります)</p>
+
+      <div class="command"></div>
+
+      <div class="frame message busy">
+        混雑しているので後でやり直して下さい
+      </div>
+
+      <div class="frame message full">
+        容量制限を超えているため実行できません
+      </div>
+
+      <h3>わかる人向けのせつめい</h3>
+      <ul>
+        <li>はてなブックマークの公開データを使っておすすめユーザを算出します
+        <ul>
+          <li>基本は最近ブックマークしたエントリをより早くブクマした人たち</li>
+        </ul></li>
+        <li>バッチ処理してます
+        <ul>
+          <li>Web経由でデータを取ってくる都合上DoSにならないようにウェイトを挟むので遅いです</li>
+          <li>計算リソースがあまりないので他にバッチ処理が走っていると処理を受け付けてもらえません</li>
+          <li>容量制限を超えた場合も処理を受け付けてもらえません</li>
+        </ul></li>
+        <li>開発中なので至らない点が多々あります
+        <ul>
+          <li>一度計算すると再計算するUIがありません(APIを直接叩けばできます)</li>
+          <li>画面遷移を進む/戻るできないので再読み込み・ID欄に入力等して下さい</li>
+          <li>進捗状況はジョブキューの残ジョブ数(の変化)から疑似的に計算しているので不正確です</li>
+        </ul></li>
+      </ul>
     </div>
 
     <div class="frame algorithm">

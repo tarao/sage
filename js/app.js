@@ -10,7 +10,6 @@ var App = function(parent) {
     });
 
     this.page = {};
-    var last = { user: 0, algorithm: 0 };
     var page = new PageControl(this.page, {
         // page transition
         init: function() {
@@ -27,9 +26,6 @@ var App = function(parent) {
                 if (algorithm) uri += ':' + algorithm
             }
             location.href = uri;
-
-            if (last.user == user && last.algorithm == algorithm) return;
-            last.user = user||null; last.algorithm = algorithm||null;
 
             if (!user) {
                 return this.open('top');
@@ -85,6 +81,47 @@ var App = function(parent) {
 
     var desc;
     this.page.user = function(user) {
+        var xhrs = [];
+        var timers = [];
+
+        var request = function(div) {
+            while (xhrs.length > 0) xhrs.shift().stop();
+            while (timers.length > 0) clearTimeout(timers.shift());
+
+            div = U.getElementsByTagAndClassName(div, 'div', 'command')[0];
+            U.removeAllChildren(div);
+            var a = document.createElement('a');
+            a.className = 'button';
+            a.href = '.';
+            a.appendChild(document.createTextNode('計算開始'));
+
+            new U.Observer(a, 'onclick', function(e) {
+                e.stop();
+                GNN.XHR.post(App.api('calc', { user: user }), function(res) {
+                    res = JSON.parse(res.responseText);
+                    switch (res.status) {
+                    case 'queued':
+                    case 'locked':
+                        page.reload(user);
+                        break;
+                    case 'busy':
+                        frame.activate('busy');
+                        break;
+                    case 'full':
+                        frame.activate('full');
+                        break;
+                    case 'error':
+                        console.log('error: '+res.value);
+                        break;
+                    }
+                }, function(res) {
+                    console.debug(res);
+                });
+            });
+
+            div.appendChild(a);
+        };
+
         var makeButton = function(node, args) {
             var button = document.createElement('a');
             button.className = 'button';
@@ -102,6 +139,8 @@ var App = function(parent) {
 
             new U.Observer(button, 'onclick', function(e) {
                 e.stop();
+                while (xhrs.length > 0) xhrs.shift().stop();
+                while (timers.length > 0) clearTimeout(timers.shift());
                 page.move(args.user, args.name);
             });
 
@@ -125,19 +164,24 @@ var App = function(parent) {
                     case 'running':
                         counter(res.jobs);
                         status.style.width = counter.percentage()+'%';
-                        setTimeout(updateStatus, 100);
+                        timers.push(setTimeout(updateStatus, 100));
                         break;
                     case 'queued':
                     case 'ready':
                         status.style.width = '0';
-                        setTimeout(updateStatus, 5000);
+                        timers.push(setTimeout(updateStatus, 5000));
+                        break;
+                    default:
+                        console.log(res.status);
                         break;
                     }
                     args.status.set(args.name, res.status);
-                    if (args.status.ready) {
-                        frame.open('request');
-                    } else {
-                        frame.open('user');
+                    if (args.status.update) {
+                        if (args.status.ready) {
+                            frame.open('request', request);
+                        } else {
+                            frame.open('user');
+                        }
                     }
                 }), page.guard(function() {
                     updateStatus();
@@ -150,7 +194,6 @@ var App = function(parent) {
             return updateStatus();
         };
 
-        var xhrs = [];
         var addButtons = function(user, ls) {
             var div = frame.filter('algorithm')[0];
             div = U.getElementsByTagAndClassName(div, 'div', 'buttons')[0];
@@ -159,11 +202,13 @@ var App = function(parent) {
             while (xhrs.length > 0) xhrs.shift().stop();
 
             var st = {
-                _st: {}, ready: false,
+                _ls: ls.map(function(x){return x[0];}),
+                _st: {}, update: false, ready: false,
                 set: function(name, status) {
-                    this._st[name] = status;
-                    var st=[]; for (var s in this._st) st.push(this._st[s]);
-                    this.ready = st.every(function(s){ return s=='ready'; });
+                    var ls = this._ls;  var st = this._st;
+                    st[name] = status;
+                    this.update = ls.every(function(x){return st[x];});
+                    this.ready = ls.every(function(x){return st[x]=='ready';});
                 }
             };
             ls.forEach(function(algo) {

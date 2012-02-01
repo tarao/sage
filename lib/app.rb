@@ -36,7 +36,16 @@ class App
     return USERS[user[0..0], user]
   end
 
-  QUEUE = Conf.new(:http_fetch => {
+  SEMAPHORE = DB['semaphore.db']
+  MAX_DISK_USAGE = 1024*1024 # kiB
+  MAX_REQUEST = 1
+  BATCH_PROCESSES = 1
+
+  QUEUE = Conf.new(:global => {
+                     :queue  => DB['global.queue.db'],
+                     :result => DB['global.queue.result.db'],
+                   },
+                   :http_fetch => {
                      :queue  => DB['http_fetch.queue.db'],
                      :result => DB['http_fetch.queue.result.db'],
                      :last   => DB['http_fetch.last.db'],
@@ -69,6 +78,8 @@ class App
 
     def dir() return App.user_dir(@user) end
 
+    def log() return File.join(dir, (@algo.to_s+'.log')) end
+
     def db()
       unless @db
         keys = [ :queue, :result, :lock ]
@@ -78,6 +89,16 @@ class App
         end
       end
       return @db
+    end
+
+    def global()
+      unless @global
+        @global = QUEUE[:global]
+        class << @global
+          [ :queue, :result ].each{|m| define_method(m){ self[m] } }
+        end
+      end
+      return @global
     end
 
     def queue() return algo_db(:queue) end
@@ -98,6 +119,59 @@ class App
     end
 
     def algo_db(which) return algo(db_(which)) end
+  end
+
+  class Semaphore
+    def initialize(user)
+      @user = user
+      @semaphore = Store.new(SEMAPHORE)
+    end
+
+    def p()
+      return @semaphore.transaction do |db|
+        pids = db[:semaphore] || []
+        req = db[:request] || {}
+        done = db[:done] || []
+
+        if pids.size < MAX_REQUEST && !req[@user]
+          pids << Process.pid
+          req[@user] = Process.pid
+          done = done.reject{|u| u==@user}
+
+          db[:semaphore] = pids
+          db[:request] = req
+          db[:done] = done
+
+          nil
+        else
+          req.keys
+        end
+      end
+    end
+
+    def v()
+      @semaphore.transaction do |db|
+        pids = (db[:semaphore] || []).reject{|pid| pid == Process.pid}
+        req = db[:request] || {}
+        done = db[:done] || []
+
+        req.delete(@user)
+        done << @user
+
+        db[:semaphore] = pids
+        db[:request] = req
+        db[:done] = done
+      end
+    end
+
+    def running?()
+      return @semaphore.ro.transaction do |db|
+        req = db[:request] || {}
+        req[@user]
+      end
+    end
+
+    def list() return @semaphore.ro.transaction{|db| db[:done] || []} end
   end
 
   def self.up_to_date?(file)
@@ -141,15 +215,25 @@ class App
   end
 
   def params() return @cgi.params end
-  def param(key) return params[key.to_s][0] end
+
+  def param(key)
+    val = params[key.to_s][0]
+    val = val.read if val.respond_to?(:read)
+    return val
+  end
 
   def check_running()
     return Store.new(@path.lock).ro.transaction{|db| db[:lock]}
   end
 
+  def check_queued() return Semaphore.new(user).running? end
+
   def status(&block)
     dir = @path.dir
-    return block.call(:ready, nil) unless File.exist?(dir)
+    if [ dir, @path.db.queue, @path.db.result ].any?{|x| !File.exist?(x)}
+      return block.call(:queued) if Semaphore.new(@user).running?
+      return block.call(:ready, nil)
+    end
 
     jobs = IO.popen('-', 'r+') do |io|
       if io # parent
@@ -175,6 +259,8 @@ class App
     else
       if File.exist?(@path.result) && File.exist?(@path.entry)
         block.call(:done, nil)
+      elsif check_queued || Semaphore.new(@user).running?
+        block.call(:queued)
       else
         block.call(:ready, nil)
       end
@@ -195,7 +281,7 @@ class App
           }
           block.call(:done, val)
         else
-          block.call(:ready, nil)
+          block.call(st, nil)
         end
       end
     end

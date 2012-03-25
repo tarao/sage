@@ -341,8 +341,13 @@ var App = function(parent) {
             return node;
         };
 
-        var showResult = function(content, result, entry) {
+        var showResult = function(content, desc, result, entry) {
             U.removeAllChildren(content);
+
+            var div = document.createElement('div');
+            div.className = 'description';
+            div.appendChild(document.createTextNode(desc));
+            content.appendChild(div);
 
             var ol = document.createElement('ol');
             ol.className = 'recommend';
@@ -420,11 +425,11 @@ var App = function(parent) {
                 json: App.api('result', { user: user, algorithm: algorithm }),
                 timeout: 5000
             }, page.guard(function(res) { // success
-                res = res.json
+                res = res.json;
                 switch (res.status) {
                 case 'done':
                     frame.open('result', function(header, result) {
-                        showResult(result, res.result, res.entry);
+                        showResult(result, res.desc, res.result, res.entry);
                     });
                     break;
                 case 'running':

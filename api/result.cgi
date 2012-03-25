@@ -13,6 +13,8 @@ app.error_exit(STATUS[400]) unless app.user
 app.error_exit(STATUS[400]) unless app.algorithm
 
 app.result do |st,val|
+  desc = Algorithm.description.find{|x| x[0].to_s == app.algorithm}
+  val.merge!(:desc => (desc||[])[1])
   case st
   when :done
     print(app.header)

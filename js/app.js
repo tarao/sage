@@ -144,7 +144,6 @@ var App = function(parent) {
                 page.move(args.user, args.name);
             });
 
-            var counter = new Counter(3);
             var updateStatus = page.guard(function() {
                 var e = button;
                 while (e && e != document) e = e.parentNode;
@@ -162,8 +161,8 @@ var App = function(parent) {
                         status.style.width = '100%';
                         break;
                     case 'running':
-                        counter(res.jobs);
-                        status.style.width = counter.percentage()+'%';
+                        var p = new Progress(res.progress[0], res.progress[1]);
+                        status.style.width = p.percentage()+'%';
                         timers.push(setTimeout(updateStatus, 100));
                         break;
                     case 'queued':
@@ -235,8 +234,6 @@ var App = function(parent) {
     //// result page
 
     this.page.result = function(user, algorithm) {
-        var counter = new Counter(3);
-
         var loading = function(small) {
             var img = document.createElement('img');
             img.src = './img/loading' + (small ? '_s' : '') + '.gif';
@@ -382,24 +379,39 @@ var App = function(parent) {
             next();
         };
 
-        var showStatus = function(node, jobs) {
-            var c = counter(jobs);
-            c.push(Math.round(100*counter.ratio()));
+        var showStatus = function(node, progress) {
+            if (progress === 0) {
+                progress = new Progress({count: 0, max: 1});
+            }
+            progress.minor = progress.minor || {};
+            var c = [
+                progress.minor.count,
+                progress.minor.max,
+                progress
+            ];
 
             [ 'count', 'ratio' ].reduce(function(r, k) {
                 var span = U.getElementsByTagAndClassName(node, 'span', k);
                 return r.concat(span);
             }, []).forEach(function(x, i) {
-                var length = c[i]*2;
+                var num = 'N/A';
+                var length;
                 var unit = '';
                 if (x.className == 'ratio') {
-                    length = Math.round(250*length/100);
-                    unit = '%';
+                    var major = c[i].major;
+                    num = c[i].percentage();
+                    length = Math.round(250*num/100);
+                    unit = [
+                        '% (phase ', major.count, '/', major.max, ')'
+                    ].join('');
+                } else {
+                    length = (c[i]||0)*2;
+                    if (typeof c[i] == 'number') num = c[i];
                 }
 
                 U.removeAllChildren(x);
                 x.style.width = length+'px';
-                x.appendChild(document.createTextNode(c[i]+unit));
+                x.appendChild(document.createTextNode(num+unit));
             });
         };
 
@@ -417,7 +429,8 @@ var App = function(parent) {
                     break;
                 case 'running':
                     frame.open('progress', function(header, status) {
-                        showStatus(status, res.jobs);
+                        var p = new Progress(res.progress[0], res.progress[1]);
+                        showStatus(status, p);
                     });
                     setTimeout(function(){ checkStatus(); }, 100);
                     break;

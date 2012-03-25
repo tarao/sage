@@ -19,7 +19,7 @@ app.status do |st,val|
     puts(app.json(:status => :done))
   when :running
     print(app.header)
-    puts(app.json(:status => :running, :jobs => val))
+    puts(app.json(:status => :running, :progress => val))
   when :queued
     print(app.header)
     puts(app.json(:status => :queued))

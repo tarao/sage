@@ -1,4 +1,4 @@
-require 'worker'
+require 'map_reduce'
 require 'hatena/bookmark'
 
 module Scoring
@@ -85,12 +85,12 @@ module Scoring
   end
 end
 
-class Worker
-  class Scoring < Worker
-    def [](ctx)
-      user = ctx[:user]
-      users = ctx[:users]
-      args = ctx[:scoring]
+module MapReduce
+  class Scoring < Reducer::Unique
+    def ureduce(key, value)
+      user = context[:user]
+      users = value[:users]
+      args = context[:scoring]
       reg = args[:regularize]
 
       dom = args[:dom].new(user, users)
@@ -101,38 +101,40 @@ class Worker
         u[:score] = score
       end
 
-      return ctx
+      emit(key, value)
     end
 
-    class NoPenalty < Worker
-      def [](ctx)
-        ctx[:users].each{|u| u[:score] = 0 if u[:score] < 0}
-        return ctx
+    class NoPenalty < Reducer::Unique
+      def ureduce(key, value)
+        value[:users].each{|u| u[:score] = 0 if u[:score] < 0}
+        emit(key, value)
       end
     end
 
-    class AllowLate < Worker
-      def [](ctx)
-        ctx[:users].each{|u| u[:score] = -u[:score] if u[:score] < 0}
-        return ctx
+    class AllowLate < Reducer::Unique
+      def ureduce(key, value)
+        value[:users].each{|u| u[:score] = -u[:score] if u[:score] < 0}
+        emit(key, value)
       end
     end
 
-    class NUsers < Worker
-      def [](ctx)
-        nusers = ctx[:users].size
+    class NUsers < Reducer::Unique
+      def ureduce(key, value)
+        users = value[:users]
+        nusers = users.size
         nusers = 1 if nusers <= 0
-        ctx[:users].each{|u| u[:score] *= nusers}
-        return ctx
+        users.each{|u| u[:score] *= nusers}
+        emit(key, value)
       end
     end
 
-    class InvNUsers < Worker
-      def [](ctx)
-        nusers = ctx[:users].size
+    class InvNUsers < Reducer::Unique
+      def ureduce(key, value)
+        users = value[:users]
+        nusers = users.size
         nusers = 1 if nusers <= 0
-        ctx[:users].each{|u| u[:score] /= nusers}
-        return ctx
+        users.each{|u| u[:score] /= nusers}
+        emit(key, value)
       end
     end
   end

@@ -1,4 +1,5 @@
 require 'pathname'
+require 'progress'
 
 $KCODE='UTF8'
 
@@ -40,6 +41,8 @@ class App
   MAX_DISK_USAGE = 1024*1024 # kiB
   MAX_REQUEST = 1
   BATCH_PROCESSES = 1
+  MAP_REDUCE = :sequential
+  # MAP_REDUCE = :job_queue
 
   QUEUE = Conf.new(:global => {
                      :queue  => DB['global.queue.db'],
@@ -54,11 +57,13 @@ class App
                        :queue  => File.join(user_dir(u), 'queue.db'),
                        :result => File.join(user_dir(u), 'queue.result.db'),
                        :lock   => File.join(user_dir(u), 'lock.db'),
+                       :status => File.join(user_dir(u), 'status.db'),
                      }
                    end)
 
   HTTP_WAIT = 1
-  UPTODATE = 24 * 60 * 60 # a file in 24 hours is up to date
+  # UPTODATE = 24 * 60 * 60 # a file in 24 hours is up to date
+  UPTODATE = 365 * 24 * 60 * 60 # 365 days
   EFFECTIVE_BOOKMARKS = 30
 
   FILE = {
@@ -71,6 +76,7 @@ class App
   SHOW_OTHER_ENTRIES = 3
 
   class Path
+    KEYS = [ :queue, :result, :lock, :status ]
     def initialize(user, algorithm)
       @user = user
       @algo = algorithm
@@ -82,10 +88,9 @@ class App
 
     def db()
       unless @db
-        keys = [ :queue, :result, :lock ]
-        @db = Hash[*keys.map{|k| [ k, algo_db(k) ]}.flatten]
+        @db = Hash[*KEYS.map{|k| [ k, algo_db(k) ]}.flatten]
         class << @db
-          [ :queue, :result, :lock ].each{|m| define_method(m){ self[m] } }
+          KEYS.each{|m| define_method(m){ self[m] } }
         end
       end
       return @db
@@ -104,6 +109,7 @@ class App
     def queue() return algo_db(:queue) end
     def result() return algo_db(:result) end
     def lock() return algo_db(:lock) end
+    def satus() return algo_db(:status) end
     def user_lock() return db_(:lock) end
     def result() return algo(FILE[:result][@user]) end
     def entry() return algo(FILE[:entry][@user]) end
@@ -179,6 +185,8 @@ class App
     return File.mtime(file).to_i + App::UPTODATE > Time.now.to_i
   end
 
+  def self.round(x, prec=10**3) return (x * prec).round / (1.0 * prec) end
+
   attr_reader :cgi, :user, :algorithm
   def initialize()
     require 'cgi'
@@ -230,32 +238,21 @@ class App
 
   def status(&block)
     dir = @path.dir
-    if [ dir, @path.db.queue, @path.db.result ].any?{|x| !File.exist?(x)}
+    if [ dir, @path.db.status, @path.lock ].any?{|x| !File.exist?(x)}
       return block.call(:queued) if Semaphore.new(@user).running?
       return block.call(:ready, nil)
     end
 
-    jobs = IO.popen('-', 'r+') do |io|
-      if io # parent
-        io.gets.to_i
-      else # child
-        size = -1
+    status_db = Store.new(@path.db.status)
+    task = Progress::Store.new(status_db, 'task')
+    phase = Progress::Store.new(status_db, 'phase')
 
-        queue = Job::Queue.new(@path.db.queue, @path.db.result)
-        queue.watch
-
-        Job::Message::EventLoop.start do |ev|
-          ev.wait{|m,s| ev.stop; size=s} if check_running
-          ev.stop
-        end
-
-        queue.unwatch
-        puts(size)
+    if check_running && phase.loaded?
+      progress = [ { :count => phase.step, :max => phase.max } ]
+      if task.loaded? && task.max
+        progress << { :count => task.step, :max => task.max }
       end
-    end
-
-    if check_running
-      block.call(:running, jobs)
+      block.call(:running, progress)
     else
       if File.exist?(@path.result) && File.exist?(@path.entry)
         block.call(:done, nil)
@@ -268,9 +265,9 @@ class App
   end
 
   def result(&block)
-    status do |st,size|
+    status do |st, progress|
       if st == :running
-        block.call(st,size)
+        block.call(st, progress)
       else
         result = IO.read(@path.result) rescue nil
         entry = IO.read(@path.entry) rescue nil

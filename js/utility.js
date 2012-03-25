@@ -58,43 +58,21 @@ var U = {
     }
 };
 
-var Counter = function(phase) {
-    var last = 0;
-    var total = 0;
-    var count = 0;
-
-    phase = phase || 1;
-    var p = 0;
-    var threshold = 5;
-    var dec = false;
-    var ratio = 0.0;
-
-    var self = function(val) {
-        if (val < last) {
-            if (!dec && val < threshold) dec = true;
-            count += last - val;
-        } else if (last < val) {
-            if (dec && val > threshold) {
-                dec = false;
-                p++;
+var Progress = function(major, minor) {
+    return {
+        major: major,
+        minor: minor,
+        ratio: function() {
+            var r = major.count / major.max;
+            if (minor && minor.max > 0) {
+                r += (1.0 / major.max) * (minor.count / minor.max);
             }
-            total += val - last;
+            return r;
+        },
+        percentage: function() {
+            return Math.round(100*this.ratio());
         }
-        last = val;
-
-        return [ count, total ];
     };
-
-    self.ratio = function() {
-        if (total <= 0) return 0;
-        return ( p + (count / total) ) / phase;
-    };
-
-    self.percentage = function() {
-        return Math.round(100*self.ratio());
-    };
-
-    return self;
 };
 
 var IdleTimer = function(wait, callback) {

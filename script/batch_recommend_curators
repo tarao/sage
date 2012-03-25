@@ -9,7 +9,7 @@ require 'permission'
 
 if %w'-h --help'.any?{|x| $*.delete(x)} || $*.size < 1
   print <<"EOM"
-Usage: #{$0} [--help] <user> [algorithm=combined]
+Usage: #{$0} [--help] <user> [algorithm=<algorithm>]
 EOM
   exit
 end
@@ -28,21 +28,11 @@ require 'job/queue'
 require 'job/queue/watch_status'
 require 'hatena/bookmark'
 require 'algorithm'
+require 'progress'
 
-# mapper
-require 'worker/id'
-require 'worker/pick'
-require 'worker/partial_information'
-require 'worker/other_entries'
-
-# reducer
-require 'worker/gather'
-require 'worker/drop'
-require 'worker/accumulate'
-require 'worker/reject'
-require 'worker/reject_inactive'
-require 'worker/sort'
-require 'worker/round'
+require 'mapper/result/truncate'
+require 'reducer/user/partial_information'
+require 'reducer/user/other_entries'
 
 user = Hatena::Bookmark::User.new(u)
 path = App::Path.new(u, algo)
@@ -62,75 +52,117 @@ queue = Job::Queue.new(path.db.queue, path.db.result)
 # clean
 [ path.db.queue,
   path.db.result,
+  path.db.status,
   queue.runner_manager_path,
   path.result,
   path.entry,
 ].each{|f| FileUtils.rm(f) if File.exist?(f)}
 
+# status logger
+status_db = path.db.status
+task = Progress::Diff.new
+$task = Progress::Store.new(Store.new(status_db), 'task', task)
+phase = Progress.new((MapReduce::SET[algo].size+1)*2)
+$phase = Progress::Store.new(Store.new(status_db), 'phase', phase)
+
 if !ENV['DEBUG'] && STDERR.tty?
   len = 0
   watcher = queue.watch_status do |size|
+    $task.set!(size)
     len = [ size.to_s.length, len ].max
     STDERR.print("\r#{size}#{' '*(len-size.to_s.length)}")
     STDERR.flush
   end
 end
 
+module MapReduce
+  if !ENV['DEBUG'] && STDERR.tty?
+    def show_status(emitter)
+      kind = ''
+      kind = 'M: ' if emitter.is_a?(Mapper)
+      kind = 'R: ' if emitter.is_a?(Reducer)
+      $phase.msg!(emitter.to_s)
+      STDERR.puts("\r"+kind+emitter.to_s) if emitter
+    end
+  else
+    def show_status(emitter) $phase.msg!(emitter.to_s) end
+  end
+
+  def next_phase(&block)
+    r = block.call
+    $phase.inc!
+    $task.clear!
+    return r
+  end
+
+  module_function :show_status, :next_phase
+
+  if App::MAP_REDUCE == :sequential
+    class Runner < Sequential
+      def self.start(queue, &block)
+        Job::Runner.start(queue) do |x|
+          block.call(self.new)
+        end
+      end
+
+      def emit(emitter, args)
+        MapReduce.next_phase do
+          MapReduce.show_status(emitter)
+          super(emitter, args)
+        end
+      end
+    end
+  else
+    class Runner < JobQueue
+      def emit(emitter, args)
+        MapReduce.next_phase do
+          MapReduce.show_status(emitter)
+          r = super(emitter, args)
+        end
+      end
+    end
+  end
+end
+
 begin
-  Job::Runner.start(queue) do |runner|
+  MapReduce::Runner.start(queue) do |runner|
     algorithm = Algorithm.new(algo)
-
-    # worker context
     ctx = algorithm.context.merge(:user => u)
+    value = [[ nil, user ]]
 
-    # map
-    ids = user.recent_bookmarks(ctx[:recent_bookmarks]).map do |b|
-      workers = []
-      args = { :uri => b['uri'], :eid => b['eid'], :count => b['count'] }
-      workers << Worker::Id.new(ctx.merge(args))
-      workers += algorithm.workers[0].map(&:new)
-      workers << Worker::Pick.new(:users)
-      queue.push(*workers).id
+    # main map/reduce process
+
+    MapReduce::SET[algo].each do |set|
+      mapper = algorithm.mapper(set[:map], ctx)
+      value = runner.map(mapper, value)
+
+      reducers = set[:reduce]
+      reducers = [ reducers ] unless reducers.is_a?(Array)
+      reducers = reducers.map{|r| algorithm.reducer(r, ctx)}.inject{|r,x|r+x}
+      value = runner.reduce(reducers, value)
     end
-
-    # reduce
-    reduce =
-      Worker::Gather.new(:user) <<
-      Worker::Reject.new{|x| (x[:eeid]||[]).size <= 1} <<
-      Worker::Accumulate.new(:score) <<
-      Worker::Reject.new{|x| x[:score] <= 0} <<
-      Worker::Drop.new(:timestamp)
-    users = reduce[queue.wait(*ids).read.flatten.compact]
-
-    # map again
-    ids = users.map do |x|
-      weight = []
-      weight << Worker::Id.new(x)
-      weight += algorithm.workers[1].map(&:new)
-      queue.push(*weight).id
-    end
-
-    # reduce again
-    reduce =
-      Worker::Reject.new{|x| x[:score] <= 0} <<
-      Worker::RejectInactive.new(0.1) <<
-      Worker::Sort.new(:score, false) <<
-      Worker::Round.new(:order) <<
-      Worker::Round.new(:score)
-    users = reduce[queue.wait(*ids).read.compact]
 
     # retrieve some extra information of top N users
+
+    mapper = algorithm.mapper(:Truncate, ctx)
+    value = runner.map(mapper, [[ nil, value.map{|k,v|[k, v.first.value]} ]])
+
+    reducers =
+      [ :PartialInformation,
+        :OtherEntries,
+      ].map{|r| algorithm.reducer(r, ctx)}.inject{|r,x|r+x}
+    value = runner.reduce(reducers, value)
+
+    value = value.map{|k,v|[k, v.first.value]}.sort do |a,b|
+      b[1][:score] <=> a[1][:score]
+    end.map do |k,v|
+      s = App.round(v[:score])
+      o = v[:order] && App.round(v[:order])
+      v.merge(:user => k, :score => s, :order => o)
+    end
     entries = {}
     other_entries = {}
-    users = users[0 ... App::MAX_RESULT]
-    ids = users.map do |x|
-      workers = []
-      workers << Worker::Id.new(x)
-      workers << Worker::PartialInformation.new
-      workers << Worker::OtherEntries.new
-      queue.push(*workers).id
-    end
-    queue.wait(*ids).read.each do |x|
+    value.each do |x|
       other_entries[x[:user]] = x[:other_entries].map do |e|
         entries[e[:eid]] = {
           :uri => e[:uri], :title => e[:title], :users => e[:users]
@@ -140,8 +172,9 @@ begin
     end
 
     # output
+
     puts
-    result = users.map do |x|
+    result = value.map do |x|
       uname = (x[:user]+':').ljust(20,' ')
       score = x[:score].to_s.rjust(8,' ')
       eids = x[:eid].map{|e| (x[:eeid]||[]).include?(e) ? "*#{e}" : e.to_s}
@@ -160,7 +193,7 @@ begin
 
       order = x[:order]
       order = "#{order*100}%" if order && order < 1.0
-      activity = Hatena::Bookmark::User.new(x[:user]).activity
+      activity = x[:activity] || 0
 
       { :user  => x[:user],
         :order => order,
@@ -168,7 +201,7 @@ begin
         :eeid  => x[:eeid],
         :oeid  => other_entries[x[:user]],
         :score => x[:score],
-        :activity => Worker::Round.round(activity),
+        :activity => App.round(activity),
       }
     end
 

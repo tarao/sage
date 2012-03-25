@@ -331,6 +331,7 @@ dl.entries dd ul li
 }
 .indicator dd.ratio
 {
+   white-space: nowrap;
    border: 1px solid #339966;
 }
 .indicator span.ratio:before,

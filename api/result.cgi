@@ -21,7 +21,7 @@ app.result do |st,val|
     puts(app.json(val.merge(:status => :done)))
   when :running
     print(app.header)
-    puts(app.json(:status => :running, :progress => val))
+    puts(app.json(val.merge(:status => :running)))
   when :ready
     print(app.header)
     puts(app.json(:status => :ready))

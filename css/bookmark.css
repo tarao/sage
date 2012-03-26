@@ -317,20 +317,17 @@ dl.entries dd ul li
    display: none ! important;
 }
 
-.indicator dt
-{
+.indicator dt {
    margin-top: 2px;
    clear: left;
    float: left;
 }
-.indicator dd
-{
+.indicator dd {
    width: 500px;
    margin-top: 2px;
    margin-left: 4em;
 }
-.indicator dd.ratio
-{
+.indicator dd.ratio {
    white-space: nowrap;
    border: 1px solid #339966;
 }
@@ -339,10 +336,12 @@ dl.entries dd ul li
    content: "\0000A0";
 }
 .indicator span.ratio,
-.indicator span.count
-{
+.indicator span.count {
    width: 0px;
    display: block;
    background: #99eecc;
    text-align: left;
+}
+.indicator .phase {
+   white-space: nowrap;
 }

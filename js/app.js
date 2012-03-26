@@ -395,6 +395,12 @@ var App = function(parent) {
                 progress
             ];
 
+            var phase = U.getElementsByTagAndClassName(node, 'dd', 'phase')[0];
+            U.removeAllChildren(phase);
+            var msg = progress.major.count+'/'+progress.major.max+' ';
+            msg += progress.msg;
+            phase.appendChild(document.createTextNode(msg));
+
             [ 'count', 'ratio' ].reduce(function(r, k) {
                 var span = U.getElementsByTagAndClassName(node, 'span', k);
                 return r.concat(span);
@@ -406,9 +412,7 @@ var App = function(parent) {
                     var major = c[i].major;
                     num = c[i].percentage();
                     length = Math.round(250*num/100);
-                    unit = [
-                        '% (phase ', major.count, '/', major.max, ')'
-                    ].join('');
+                    unit = '%';
                 } else {
                     length = (c[i]||0)*2;
                     if (typeof c[i] == 'number') num = c[i];
@@ -435,6 +439,7 @@ var App = function(parent) {
                 case 'running':
                     frame.open('progress', function(header, status) {
                         var p = new Progress(res.progress[0], res.progress[1]);
+                        p.msg = res.progress[0].msg;
                         showStatus(status, p);
                     });
                     setTimeout(function(){ checkStatus(); }, 100);

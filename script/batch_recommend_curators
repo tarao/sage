@@ -81,7 +81,7 @@ module MapReduce
       kind = ''
       kind = 'M: ' if emitter.is_a?(Mapper)
       kind = 'R: ' if emitter.is_a?(Reducer)
-      $phase.msg!(emitter.to_s)
+      $phase.msg!(kind+emitter.to_s)
       STDERR.puts("\r"+kind+emitter.to_s) if emitter
     end
   else

@@ -248,7 +248,8 @@ class App
     phase = Progress::Store.new(status_db, 'phase')
 
     if check_running && phase.loaded?
-      progress = [ { :count => phase.step, :max => phase.max } ]
+      progress = [ { :count => phase.step, :max => phase.max,
+                     :msg => phase.msg } ]
       if task.loaded? && task.max
         progress << { :count => task.step, :max => task.max }
       end
@@ -267,7 +268,7 @@ class App
   def result(&block)
     status do |st, progress|
       if st == :running
-        block.call(st, progress)
+        block.call(st, :progress => progress)
       else
         result = IO.read(@path.result) rescue nil
         entry = IO.read(@path.entry) rescue nil
